@@ -11,8 +11,8 @@ SSL_DEB="libssl1.1_1.1.1f-1ubuntu2.16_amd64.deb"
 wget $SSL_URL
 sudo dpkg -i $SSL_DEB
 
-sudo apt update
-sudo apt install build-essential python2
+sudo apt -y update
+sudo apt -y install build-essential python2
 
 if [ ! -f "$SGX_BIN" ]; then
 	wget "$SGX_INSTALLER_URL"
