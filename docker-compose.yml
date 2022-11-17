@@ -1,0 +1,8 @@
+version: '3' 
+services:
+  sgx_dev:
+    build: .
+    container_name: sgx
+    volumes:
+     - ./EnclaveProtocol:/home/syssec/EnclaveProtocol
+    tty: true
