@@ -5,6 +5,12 @@
 #include <unistd.h>
 #include <pwd.h>
 
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#include <errno.h>
+
 #include "sgx_urts.h"
 #include "App.h"
 #include "Enclave_u.h"
@@ -133,13 +139,71 @@ int initialize_enclave(void)
     return 0;
 }
 
+static int ipc_fd = -1;
+
+const char *ipc_path = "/tmp/syssec_sock";
+
+static void ipc_connect() {
+	int sock = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+	int r, fd;
+	//if (r < 0 && errno != EEXIST) {
+	if (sock < 0) {
+		perror("socket");
+		exit(1);
+	}
+	struct sockaddr_un addr;
+	addr.sun_family = AF_UNIX;
+	strcpy(addr.sun_path, ipc_path);
+	r = bind(sock, (sockaddr*)&addr, sizeof addr);
+		if (r < 0 && errno == EADDRINUSE) {
+		fd = r = connect(sock, (sockaddr*)&addr, sizeof addr);
+		if (r < 0) {
+			perror("connect");
+			exit(1);
+		}
+	} else
+	if (r < 0) {
+		perror("bind");
+		exit(1);
+	}
+	 else {
+		 r = listen(sock, 0);
+		 if (r < 0) {
+			 perror("listen");
+			 exit(1);
+		 }
+		 fd = r = accept(sock, NULL, 0);
+		 if (r < 0) {
+			 perror("accept");
+			 exit(1);
+		 }
+		 r = unlink(ipc_path);
+		 if (r < 0) {
+			 perror("unlink");
+			 exit(1);
+		 }
+	 }
+	ipc_fd = fd;
+}
+
 /* OCall functions */
-void ocall_print_string(const char *str)
+void ipc_send(const char *buf, size_t buflen)
 {
     /* Proxy/Bridge will check the length and null-terminate
      * the input string to prevent buffer overflow.
      */
-    printf("%s", str);
+    ssize_t r = write(ipc_fd, buf, buflen);
+    if (r < 0) {
+	    perror("write");
+	    exit(1);
+    } else if (r != (ssize_t)buflen) {
+	    fprintf(stderr, "short write: %zd < %zd", r, buflen);
+	    exit(1);
+    }
+}
+
+void ocall_eputs(const char *errmsg) {
+	fprintf(stderr, "%s\n", errmsg);
 }
 
 
@@ -156,13 +220,20 @@ int SGX_CDECL main(int argc, char *argv[])
     printf("From App: Enclave creation success. \n");
     printf("From App: Write your protocol here ... \n");
 
+    ipc_connect();
 
     sgx_status_t sgx_status;
 
-    printSecret(global_eid, &sgx_status);
+    enclave_reset(global_eid, &sgx_status);
     if (sgx_status != SGX_SUCCESS) {
         print_error_message(sgx_status);
         return -1;
+    }
+
+    size_t buflen;
+    char buf[BUFSIZ];
+    while ((buflen = read(ipc_fd, buf, BUFSIZ)) > 0) {
+	    ipc_recv(global_eid, buf, buflen);
     }
 
     /* Destroy the enclave */

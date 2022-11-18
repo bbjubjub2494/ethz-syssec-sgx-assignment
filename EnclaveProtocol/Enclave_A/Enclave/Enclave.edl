@@ -41,7 +41,8 @@ enclave {
 
 
     trusted{
-      public sgx_status_t printSecret(void);
+      public sgx_status_t enclave_reset(void);
+      public void ipc_recv([in, count=buflen] const char *buf, size_t buflen);
     };
     /*
      * ocall_print_string - invokes OCALL to display string buffer inside the enclave.
@@ -49,7 +50,8 @@ enclave {
      *  [string]: specifies 'str' is a NULL terminated buffer.
      */
     untrusted {
-        void ocall_print_string([in, string] const char *str);
+        void ocall_eputs([in, string] const char *err);
+	void ipc_send([in, count=buflen] const char *buf, size_t buflen);
     };
 
 };
