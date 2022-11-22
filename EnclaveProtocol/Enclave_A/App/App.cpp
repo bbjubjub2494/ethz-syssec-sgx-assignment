@@ -183,6 +183,7 @@ static void ipc_connect() {
 			 exit(1);
 		 }
 	 }
+	printf("%d: fd\n", fd);
 	ipc_fd = fd;
 }
 
@@ -233,7 +234,7 @@ int SGX_CDECL main(int argc, char *argv[])
     size_t buflen;
     char buf[BUFSIZ];
     while ((buflen = read(ipc_fd, buf, BUFSIZ)) > 0) {
-	    ipc_recv(global_eid, buf, buflen);
+	    ipc_recv(global_eid, &sgx_status, buf, buflen);
     }
 
     /* Destroy the enclave */
