@@ -32,15 +32,15 @@
 #ifndef _ENCLAVE_H_
 #define _ENCLAVE_H_
 
+#include "sgx_tcrypto.h"
 #include <assert.h>
 #include <stdlib.h>
-#include "sgx_tcrypto.h"
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-int printf(const char* fmt, ...);
+int printf(const char *fmt, ...);
 
 #if defined(__cplusplus)
 }
