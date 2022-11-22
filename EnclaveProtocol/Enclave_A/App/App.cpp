@@ -90,7 +90,6 @@ const char *ipc_path = "/tmp/syssec_sock";
 static void ipc_connect() {
   int sock = socket(AF_UNIX, SOCK_SEQPACKET, 0);
   int r, fd;
-  // if (r < 0 && errno != EEXIST) {
   if (sock < 0) {
     perror("socket");
     exit(1);
@@ -100,11 +99,12 @@ static void ipc_connect() {
   strcpy(addr.sun_path, ipc_path);
   r = bind(sock, (sockaddr *)&addr, sizeof addr);
   if (r < 0 && errno == EADDRINUSE) {
-    fd = r = connect(sock, (sockaddr *)&addr, sizeof addr);
+    r = connect(sock, (sockaddr *)&addr, sizeof addr);
     if (r < 0) {
       perror("connect");
       exit(1);
     }
+    fd = sock;
   } else if (r < 0) {
     perror("bind");
     exit(1);
@@ -125,7 +125,6 @@ static void ipc_connect() {
       exit(1);
     }
   }
-  printf("%d: fd\n", fd);
   ipc_fd = fd;
 }
 
