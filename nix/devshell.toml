@@ -1,0 +1,29 @@
+imports = [
+  "git.hooks",
+]
+
+[devshell]
+name = "ga3"
+
+[[commands]]
+name = "clang-format"
+package = "clang-tools"
+category = "formatters"
+
+[git.hooks]
+enable = true
+pre-commit.text = """
+if git rev-parse --verify HEAD >/dev/null 2>&1
+then
+  against=HEAD
+else
+  # Initial commit: diff against an empty tree object
+  against=$(git hash-object -t tree /dev/null)
+fi
+
+function find_staged {
+  git diff-index --name-only --cached $against --diff-filter d -- "$@"
+}
+
+find_staged '*.h' '*.cpp' | xargs -r clang-format -n -Werror || exit
+"""
