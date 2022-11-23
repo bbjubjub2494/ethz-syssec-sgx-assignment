@@ -108,7 +108,7 @@ inline const Message *Message::safe_cast(const uint8_t *data, size_t len) {
 }
 
 class Actor {
-  EnclaveState stage = ERROR;
+  EnclaveState state = ERROR;
 
   sgx_ecc_state_handle_t handle;
   sgx_ec256_private_t sk;
@@ -125,28 +125,28 @@ public:
     status = sgx_ecc256_open_context(&handle);
     if (status) {
       logf("sgx_ecc256_open_context: %d", status);
-      stage = ERROR;
+      state = ERROR;
       return status;
     }
 
     status = sgx_ecc256_create_key_pair(&sk, &pk, handle);
     if (status) {
       logf("sgx_ecc256_create_key_pair: %d", status);
-      stage = ERROR;
+      state = ERROR;
       return status;
     }
     IpcHandshakePacket handshake(pk);
     ipc_send((char *)handshake.to_void(), sizeof handshake);
-    stage = NO_KEY;
+    state = NO_KEY;
     return status;
   }
 
   EnclaveState get_state() const {
-    return stage;
+    return state;
   }
 
   sgx_status_t recv(const IpcHandshakePacket *pkt) {
-    assert(stage == NO_KEY);
+    assert(state == NO_KEY);
     sgx_ec256_dh_shared_t dh_ssk;
     sgx_status_t status =
         sgx_ecc256_compute_shared_dhkey(&sk, &pkt->sender_pk, &dh_ssk, handle);
@@ -155,12 +155,12 @@ public:
       return status;
     }
     memcpy(ssk, &dh_ssk.s, sizeof ssk);
-    stage = READY;
+    state = READY;
     return status;
   }
 
   sgx_status_t recv(const IpcRecordPacket *pkt) {
-    assert(stage == READY);
+    assert(state == READY);
     uint8_t iv[IV_LEN];
     std::vector<uint8_t> buf(pkt->len);
     memcpy(iv, pkt->iv, sizeof iv);
@@ -188,11 +188,11 @@ public:
   }
 
   sgx_status_t recv(const ResponseMessage *msg) {
-    assert(stage == AWAIT_RESPONSE);
+    assert(state == AWAIT_RESPONSE);
     assert(challenge_id == msg->challenge_id);
     assert(msg->c - a == b);
     logf("Challenge passed!");
-    stage = READY;
+    state = READY;
     return SGX_SUCCESS;
   }
 
@@ -209,20 +209,20 @@ public:
   }
 
   sgx_status_t issue_challenge() {
-    assert(stage == READY);
+    assert(state == READY);
     sgx_read_rand((uint8_t *)&challenge_id, sizeof challenge_id);
     sgx_read_rand((uint8_t *)&a, sizeof a);
     sgx_read_rand((uint8_t *)&b, sizeof b);
     ChallengeMessage msg(challenge_id, a, b);
-    stage = AWAIT_RESPONSE;
+    state = AWAIT_RESPONSE;
     return send(&msg);
   }
 };
 
-static Actor state;
+static Actor actor;
 
 sgx_status_t enclave_reset() {
-  return state.reset();
+  return actor.reset();
 }
 
 sgx_status_t ipc_recv(const char *buf, size_t buflen) {
@@ -232,13 +232,13 @@ sgx_status_t ipc_recv(const char *buf, size_t buflen) {
   case IpcPacket::HANDSHAKE: {
     auto pkt1 = static_cast<const IpcHandshakePacket *>(pkt);
     assert(buflen >= sizeof *pkt1);
-    return state.recv(pkt1);
+    return actor.recv(pkt1);
   } break;
   case IpcPacket::RECORD: {
     auto pkt1 = static_cast<const IpcRecordPacket *>(pkt);
     assert(buflen >= sizeof *pkt1);
     assert(buflen >= pkt1->size());
-    return state.recv(pkt1);
+    return actor.recv(pkt1);
   } break;
   default:
     logf("unable to upcast!");
@@ -247,8 +247,8 @@ sgx_status_t ipc_recv(const char *buf, size_t buflen) {
 }
 
 sgx_status_t enclave_issue_challenge() {
-  return state.issue_challenge();
+  return actor.issue_challenge();
 }
 EnclaveState enclave_state() {
-  return state.get_state();
+  return actor.get_state();
 }
