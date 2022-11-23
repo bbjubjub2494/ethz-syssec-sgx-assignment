@@ -4,7 +4,6 @@
 
 #include "sgx_tcrypto.h"
 
-
 const size_t IV_LEN = 16; // must be equal to block size (128 bits)
 
 struct IpcPacket {

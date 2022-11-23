@@ -1,15 +1,14 @@
 #include "Enclave.h"
 #include "Enclave_t.h" /* ocalls */
 
-#include "packets.hpp"
 #include "messages.hpp"
+#include "packets.hpp"
 #include "utils.hpp"
 
 #include <cstring>
 #include <vector>
 
 #include "sgx_trts.h"
-
 
 class Actor {
   EnclaveState state = ERROR;
@@ -51,8 +50,8 @@ public:
 
   sgx_status_t recv(const IpcHandshakePacket *pkt) {
     if (state != NO_KEY) {
-	    logf("unexpected handshake");
-	    return SGX_ERROR_INVALID_PARAMETER;
+      logf("unexpected handshake");
+      return SGX_ERROR_INVALID_PARAMETER;
     }
     sgx_ec256_dh_shared_t dh_ssk;
     sgx_status_t status =
@@ -68,8 +67,8 @@ public:
 
   sgx_status_t recv(const IpcRecordPacket *pkt) {
     if (state == NO_KEY || state == ERROR) {
-	    logf("unable to process messages");
-	    return SGX_ERROR_INVALID_PARAMETER;
+      logf("unable to process messages");
+      return SGX_ERROR_INVALID_PARAMETER;
     }
     uint8_t iv[IV_LEN];
     std::vector<uint8_t> buf(pkt->len);
@@ -82,10 +81,10 @@ public:
   sgx_status_t recv(const Message *msg) {
     switch (msg->type) {
     case Message::CHALLENGE:
-	    logf("received challenge");
+      logf("received challenge");
       return recv((ChallengeMessage *)msg);
     case Message::RESPONSE:
-	    logf("received response");
+      logf("received response");
       return recv((ResponseMessage *)msg);
     default:
       return SGX_ERROR_INVALID_PARAMETER;
@@ -101,23 +100,17 @@ public:
   }
 
   sgx_status_t recv(const ResponseMessage *msg) {
-    if(state != AWAIT_RESPONSE)
-     {
-	    logf("unexpected response");
-	    return SGX_ERROR_INVALID_PARAMETER;
+    if (state != AWAIT_RESPONSE) {
+      logf("unexpected response");
+      return SGX_ERROR_INVALID_PARAMETER;
     }
-    logf("my cid: %ld", msg->challenge_id);
-    logf("stored cid: %ld", challenge_id);
-    logf("diff: %ld", msg->challenge_id - challenge_id);
-    if(challenge_id != msg->challenge_id);
-     {
-	    logf("invalid response challenge id");
-	    return SGX_ERROR_INVALID_PARAMETER;
+    if (challenge_id != msg->challenge_id) {
+      logf("invalid response challenge id");
+      return SGX_ERROR_INVALID_PARAMETER;
     }
-    if (msg->c - a != b)
-     {
-	    logf("invalid response proof");
-	    return SGX_ERROR_INVALID_PARAMETER;
+    if (msg->c - a != b) {
+      logf("invalid response proof");
+      return SGX_ERROR_INVALID_PARAMETER;
     }
     logf("Challenge passed!");
     state = READY;
