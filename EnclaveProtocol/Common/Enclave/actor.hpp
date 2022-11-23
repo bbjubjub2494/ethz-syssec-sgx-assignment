@@ -50,7 +50,10 @@ public:
   }
 
   sgx_status_t recv(const IpcHandshakePacket *pkt) {
-    assert(state == NO_KEY);
+    if (state != NO_KEY) {
+	    logf("unexpected handshake");
+	    return SGX_ERROR_INVALID_PARAMETER;
+    }
     sgx_ec256_dh_shared_t dh_ssk;
     sgx_status_t status =
         sgx_ecc256_compute_shared_dhkey(&sk, &pkt->sender_pk, &dh_ssk, handle);
@@ -64,7 +67,10 @@ public:
   }
 
   sgx_status_t recv(const IpcRecordPacket *pkt) {
-    assert(state == READY);
+    if (state == NO_KEY || state == ERROR) {
+	    logf("unable to process messages");
+	    return SGX_ERROR_INVALID_PARAMETER;
+    }
     uint8_t iv[IV_LEN];
     std::vector<uint8_t> buf(pkt->len);
     std::memcpy(iv, pkt->iv, sizeof iv);
@@ -76,8 +82,10 @@ public:
   sgx_status_t recv(const Message *msg) {
     switch (msg->type) {
     case Message::CHALLENGE:
+	    logf("received challenge");
       return recv((ChallengeMessage *)msg);
     case Message::RESPONSE:
+	    logf("received response");
       return recv((ResponseMessage *)msg);
     default:
       return SGX_ERROR_INVALID_PARAMETER;
@@ -87,14 +95,30 @@ public:
   sgx_status_t recv(const ChallengeMessage *msg) {
     auto id = msg->challenge_id;
     auto c = msg->a + msg->b;
+    logf("my cid: %ld", id);
     ResponseMessage rep(id, c);
     return send(&rep);
   }
 
   sgx_status_t recv(const ResponseMessage *msg) {
-    assert(state == AWAIT_RESPONSE);
-    assert(challenge_id == msg->challenge_id);
-    assert(msg->c - a == b);
+    if(state != AWAIT_RESPONSE)
+     {
+	    logf("unexpected response");
+	    return SGX_ERROR_INVALID_PARAMETER;
+    }
+    logf("my cid: %ld", msg->challenge_id);
+    logf("stored cid: %ld", challenge_id);
+    logf("diff: %ld", msg->challenge_id - challenge_id);
+    if(challenge_id != msg->challenge_id);
+     {
+	    logf("invalid response challenge id");
+	    return SGX_ERROR_INVALID_PARAMETER;
+    }
+    if (msg->c - a != b)
+     {
+	    logf("invalid response proof");
+	    return SGX_ERROR_INVALID_PARAMETER;
+    }
     logf("Challenge passed!");
     state = READY;
     return SGX_SUCCESS;
@@ -114,10 +138,12 @@ public:
 
   sgx_status_t issue_challenge() {
     assert(state == READY);
+    logf("issuing challenge...");
     sgx_read_rand((uint8_t *)&challenge_id, sizeof challenge_id);
     sgx_read_rand((uint8_t *)&a, sizeof a);
     sgx_read_rand((uint8_t *)&b, sizeof b);
     ChallengeMessage msg(challenge_id, a, b);
+    logf("my cid: %ld", challenge_id);
     state = AWAIT_RESPONSE;
     return send(&msg);
   }
