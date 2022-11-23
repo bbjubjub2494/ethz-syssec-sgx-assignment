@@ -11,13 +11,13 @@
 
 const size_t IV_LEN = 16; // must be equal to block size (128 bits)
 
-int eprintf(const char *fmt, ...) {
+int logf(const char *fmt, ...) {
   char buf[BUFSIZ] = {'\0'};
   va_list ap;
   va_start(ap, fmt);
   vsnprintf(buf, BUFSIZ, fmt, ap);
   va_end(ap);
-  ocall_eputs(buf);
+  ocall_elog(buf);
   return (int)strnlen(buf, BUFSIZ - 1) + 1;
 };
 
@@ -107,13 +107,8 @@ inline const Message *Message::safe_cast(const uint8_t *data, size_t len) {
   return msg;
 }
 
-class EnclaveState {
-  enum {
-    NO_KEY,
-    READY,
-    AWAIT_RESPONSE,
-    ERROR,
-  } stage = ERROR;
+class Actor {
+  EnclaveState stage = ERROR;
 
   sgx_ecc_state_handle_t handle;
   sgx_ec256_private_t sk;
@@ -129,14 +124,14 @@ public:
 
     status = sgx_ecc256_open_context(&handle);
     if (status) {
-      eprintf("sgx_ecc256_open_context: %d", status);
+      logf("sgx_ecc256_open_context: %d", status);
       stage = ERROR;
       return status;
     }
 
     status = sgx_ecc256_create_key_pair(&sk, &pk, handle);
     if (status) {
-      eprintf("sgx_ecc256_create_key_pair: %d", status);
+      logf("sgx_ecc256_create_key_pair: %d", status);
       stage = ERROR;
       return status;
     }
@@ -146,13 +141,17 @@ public:
     return status;
   }
 
+  EnclaveState get_state() const {
+    return stage;
+  }
+
   sgx_status_t recv(const IpcHandshakePacket *pkt) {
     assert(stage == NO_KEY);
     sgx_ec256_dh_shared_t dh_ssk;
     sgx_status_t status =
         sgx_ecc256_compute_shared_dhkey(&sk, &pkt->sender_pk, &dh_ssk, handle);
     if (status) {
-      eprintf("sgx_ecc256_compute_shared_dhkey: %d", status);
+      logf("sgx_ecc256_compute_shared_dhkey: %d", status);
       return status;
     }
     memcpy(ssk, &dh_ssk.s, sizeof ssk);
@@ -167,7 +166,6 @@ public:
     memcpy(iv, pkt->iv, sizeof iv);
     sgx_aes_ctr_decrypt(&ssk, pkt->ciphertext, pkt->len, iv, 8, buf.data());
     recv(Message::safe_cast(buf.data(), buf.size()));
-    eprintf("%s", buf.data());
     return SGX_SUCCESS;
   }
 
@@ -193,7 +191,7 @@ public:
     assert(stage == AWAIT_RESPONSE);
     assert(challenge_id == msg->challenge_id);
     assert(msg->c - a == b);
-    eprintf("Challenge passed!");
+    logf("Challenge passed!");
     stage = READY;
     return SGX_SUCCESS;
   }
@@ -221,7 +219,7 @@ public:
   }
 };
 
-static EnclaveState state;
+static Actor state;
 
 sgx_status_t enclave_reset() {
   return state.reset();
@@ -243,11 +241,14 @@ sgx_status_t ipc_recv(const char *buf, size_t buflen) {
     return state.recv(pkt1);
   } break;
   default:
-    eprintf("unable to upcast!");
+    logf("unable to upcast!");
     return SGX_ERROR_INVALID_PARAMETER;
   }
 }
 
 sgx_status_t enclave_issue_challenge() {
   return state.issue_challenge();
+}
+EnclaveState enclave_state() {
+  return state.get_state();
 }

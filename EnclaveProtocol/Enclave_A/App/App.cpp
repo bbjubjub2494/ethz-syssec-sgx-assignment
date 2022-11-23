@@ -143,8 +143,8 @@ void ipc_send(const char *buf, size_t buflen) {
   }
 }
 
-void ocall_eputs(const char *errmsg) {
-  fprintf(stderr, "%s\n", errmsg);
+void ocall_elog(const char *msg) {
+  fprintf(stderr, "From Enclave: %s\n", msg);
 }
 
 /* Application entry */
@@ -171,12 +171,25 @@ int SGX_CDECL main(int argc, char *argv[]) {
 
   size_t buflen;
   char buf[BUFSIZ];
-  bool hello = false;
+  bool need_challenge = true;
   while ((buflen = read(ipc_fd, buf, BUFSIZ)) > 0) {
     ipc_recv(global_eid, &sgx_status, buf, buflen);
-    if (!hello) {
+    if (need_challenge) {
+      EnclaveState state;
+      sgx_status = enclave_state(global_eid, &state);
+      if (sgx_status != SGX_SUCCESS) {
+        print_error_message(sgx_status);
+        return -1;
+      }
+      printf("State: %d\n", state);
+      if (state != READY)
+        continue;
       enclave_issue_challenge(global_eid, &sgx_status);
-      hello = true;
+      if (sgx_status != SGX_SUCCESS) {
+        print_error_message(sgx_status);
+        return -1;
+      }
+      need_challenge = false;
     }
   }
 
