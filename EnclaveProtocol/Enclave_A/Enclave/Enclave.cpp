@@ -9,6 +9,8 @@
 #include "sgx_tcrypto.h"
 #include "sgx_trts.h"
 
+const size_t IV_LEN = 16; // must be equal to block size (128 bits)
+
 int eprintf(const char *fmt, ...) {
   char buf[BUFSIZ] = {'\0'};
   va_list ap;
@@ -33,7 +35,7 @@ struct IpcHandshakePacket : public IpcPacket {
       : IpcPacket(HANDSHAKE), sender_pk(sender_pk) {}
 };
 struct IpcRecordPacket : public IpcPacket {
-  uint8_t iv[8];
+  uint8_t iv[IV_LEN];
   const uint32_t len;
   uint8_t ciphertext[];
 
@@ -102,20 +104,24 @@ public:
 
   sgx_status_t recv(const IpcRecordPacket *pkt) {
     assert(stage == READY);
+    uint8_t iv[IV_LEN];
     std::vector<uint8_t> buf(pkt->len);
-    uint8_t iv[8];
     memcpy(iv, pkt->iv, sizeof iv);
     sgx_aes_ctr_decrypt(&ssk, pkt->ciphertext, pkt->len, iv, 8, buf.data());
-    // eprintf("%s", buf.data());
+    eprintf("%s", buf.data());
     return SGX_SUCCESS;
   }
 
   sgx_status_t say_hello() {
     uint8_t msg[] = "hello world!";
-    uint8_t iv[8] = {}; // TODO: randomize
+    uint8_t iv[IV_LEN] = {}; // TODO: randomize
     auto pkt = IpcRecordPacket::make(sizeof msg);
+    memcpy(pkt->iv, iv, sizeof pkt->iv);
     sgx_aes_ctr_encrypt(&ssk, msg, sizeof msg, iv, 8, pkt->ciphertext);
     ipc_send((char *)pkt->to_void(), pkt->size());
+    std::vector<uint8_t> buf(pkt->len);
+    memcpy(iv, pkt->iv, sizeof iv);
+    sgx_aes_ctr_decrypt(&ssk, pkt->ciphertext, pkt->len, iv, 8, buf.data());
     return SGX_SUCCESS;
   }
 };

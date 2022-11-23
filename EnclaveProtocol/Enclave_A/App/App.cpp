@@ -169,12 +169,15 @@ int SGX_CDECL main(int argc, char *argv[]) {
     return -1;
   }
 
-  say_hello(global_eid);
-
   size_t buflen;
   char buf[BUFSIZ];
+  bool hello = false;
   while ((buflen = read(ipc_fd, buf, BUFSIZ)) > 0) {
     ipc_recv(global_eid, &sgx_status, buf, buflen);
+    if (!hello) {
+      say_hello(global_eid);
+      hello = true;
+    }
   }
 
   /* Destroy the enclave */
