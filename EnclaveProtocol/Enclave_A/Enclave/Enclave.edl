@@ -42,7 +42,7 @@ enclave {
 
     trusted{
       public sgx_status_t enclave_reset(void);
-      public sgx_status_t ipc_recv([in, count=buflen] const char *buf, size_t buflen);
+      public sgx_status_t enclave_ipc_recv([in, count=buflen] const char *buf, size_t buflen);
       public sgx_status_t enclave_issue_challenge();
       public EnclaveState enclave_state();
     };
@@ -53,7 +53,7 @@ enclave {
      */
     untrusted {
         void ocall_elog([in, string] const char *msg);
-	void ipc_send([in, count=buflen] const char *buf, size_t buflen);
+	void ocall_ipc_send([in, count=buflen] const char *buf, size_t buflen);
     };
 
 };

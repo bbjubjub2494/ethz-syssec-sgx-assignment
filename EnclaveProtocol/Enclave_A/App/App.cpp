@@ -129,7 +129,7 @@ static void ipc_connect() {
 }
 
 /* OCall functions */
-void ipc_send(const char *buf, size_t buflen) {
+void ocall_ipc_send(const char *buf, size_t buflen) {
   /* Proxy/Bridge will check the length and null-terminate
    * the input string to prevent buffer overflow.
    */
@@ -173,7 +173,7 @@ int SGX_CDECL main(int argc, char *argv[]) {
   char buf[BUFSIZ];
   bool need_challenge = true;
   while ((buflen = read(ipc_fd, buf, BUFSIZ)) > 0) {
-    ipc_recv(global_eid, &sgx_status, buf, buflen);
+    enclave_ipc_recv(global_eid, &sgx_status, buf, buflen);
     if (need_challenge) {
       EnclaveState state;
       sgx_status = enclave_state(global_eid, &state);
