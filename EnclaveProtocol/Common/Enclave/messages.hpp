@@ -1,5 +1,9 @@
+#include <cstring>
+
+const size_t PSK_LEN = 10;
+
 struct Message {
-  enum Type { CHALLENGE, RESPONSE } type;
+  enum Type { AUTHENTICATION, CHALLENGE, RESPONSE } type;
   const uint8_t *data() const {
     return reinterpret_cast<const uint8_t *>(this);
   }
@@ -8,6 +12,16 @@ struct Message {
 protected:
   Message(Type type) : type(type) {}
   size_t data_size() const; // override me!
+};
+
+struct AuthenticationMessage : public Message {
+  uint8_t psk[PSK_LEN];
+  AuthenticationMessage(uint8_t psk[PSK_LEN]) : Message(AUTHENTICATION) {
+    std::memcpy(this->psk, psk, PSK_LEN);
+  }
+  const size_t data_size() const {
+    return sizeof *this;
+  }
 };
 
 struct ChallengeMessage : public Message {
@@ -35,6 +49,10 @@ inline const Message *Message::safe_cast(const uint8_t *data, size_t len) {
     return nullptr;
   auto msg = reinterpret_cast<const Message *>(data);
   switch (msg->type) {
+  case AUTHENTICATION:
+    if (len < sizeof(AuthenticationMessage))
+      return nullptr;
+    break;
   case CHALLENGE:
     if (len < sizeof(ChallengeMessage))
       return nullptr;

@@ -35,6 +35,7 @@ enclave {
 
   enum EnclaveState {
     NO_KEY,
+    AWAIT_AUTHENTICATION,
     READY,
     AWAIT_RESPONSE,
     DONE,

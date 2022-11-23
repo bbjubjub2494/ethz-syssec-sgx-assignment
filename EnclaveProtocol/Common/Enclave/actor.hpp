@@ -77,8 +77,10 @@ public:
     /*************************
      * END 3. calculate shared secret
      *************************/
-    state = READY;
-    return status;
+    state = AWAIT_AUTHENTICATION;
+    uint8_t psk[PSK_LEN];
+    AuthenticationMessage msg(psk);
+    return send(&msg);
   }
 
   sgx_status_t recv(const IpcRecordPacket *pkt) {
@@ -102,6 +104,9 @@ public:
 
   sgx_status_t recv(const Message *msg) {
     switch (msg->type) {
+    case Message::AUTHENTICATION:
+      logf("received PSK authentication");
+      return recv((AuthenticationMessage *)msg);
     case Message::CHALLENGE:
       logf("received challenge");
       return recv((ChallengeMessage *)msg);
@@ -111,6 +116,16 @@ public:
     default:
       return SGX_ERROR_INVALID_PARAMETER;
     }
+  }
+
+  sgx_status_t recv(const AuthenticationMessage *msg) {
+    if (state != AWAIT_AUTHENTICATION) {
+      logf("unexpected authentication");
+      return SGX_ERROR_INVALID_PARAMETER;
+    }
+    // TODO: check
+    state = READY;
+    return SGX_SUCCESS;
   }
 
   sgx_status_t recv(const ChallengeMessage *msg) {
