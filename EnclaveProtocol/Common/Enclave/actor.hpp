@@ -20,6 +20,7 @@ class Actor {
 
   uint64_t challenge_id;
   uint64_t a, b;
+  uint64_t round_count = 20;
 
 public:
   sgx_status_t reset() {
@@ -95,7 +96,8 @@ public:
     auto id = msg->challenge_id;
     auto c = msg->a + msg->b;
     ResponseMessage rep(id, c);
-    state = DONE;
+    if (--round_count <= 0)
+      state = DONE;
     return send(&rep);
   }
 
@@ -114,6 +116,8 @@ public:
     }
     logf("Challenge passed!");
     state = READY;
+    if (--round_count <= 0)
+      state = DONE;
     return SGX_SUCCESS;
   }
 

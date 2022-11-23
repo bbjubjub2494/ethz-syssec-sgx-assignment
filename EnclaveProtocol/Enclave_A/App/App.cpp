@@ -27,7 +27,6 @@ int SGX_CDECL main(int argc, char *argv[]) {
 
   size_t buflen;
   char buf[BUFSIZ];
-  bool need_challenge = true;
   while ((buflen = read(ipc_fd, buf, BUFSIZ)) > 0) {
     enclave_ipc_recv(eid, &sgx_status, buf, buflen);
     if (sgx_status != SGX_SUCCESS) {
@@ -40,13 +39,12 @@ int SGX_CDECL main(int argc, char *argv[]) {
       print_error_message(sgx_status);
       return -1;
     }
-    if (need_challenge && state == READY) {
+    if (state == READY) {
       enclave_issue_challenge(eid, &sgx_status);
       if (sgx_status != SGX_SUCCESS) {
         print_error_message(sgx_status);
         return -1;
       }
-      need_challenge = false;
     }
     if (state == DONE || state == ERROR)
       break;
