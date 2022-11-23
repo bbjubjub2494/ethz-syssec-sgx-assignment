@@ -14,7 +14,6 @@ int SGX_CDECL main(int argc, char *argv[]) {
     return -1;
   }
   printf("From App: Enclave creation success. \n");
-  printf("From App: Write your protocol here ... \n");
 
   ipc_connect();
 
