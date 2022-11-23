@@ -175,7 +175,7 @@ int SGX_CDECL main(int argc, char *argv[]) {
   while ((buflen = read(ipc_fd, buf, BUFSIZ)) > 0) {
     ipc_recv(global_eid, &sgx_status, buf, buflen);
     if (!hello) {
-      say_hello(global_eid);
+      enclave_issue_challenge(global_eid, &sgx_status);
       hello = true;
     }
   }

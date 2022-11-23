@@ -23,10 +23,12 @@ int eprintf(const char *fmt, ...) {
 
 struct IpcPacket {
   const enum Type { HANDSHAKE, RECORD } type;
-  IpcPacket(Type type) : type(type) {}
   void *to_void() {
     return this;
   }
+
+protected:
+  IpcPacket(Type type) : type(type) {}
 };
 
 struct IpcHandshakePacket : public IpcPacket {
@@ -34,6 +36,7 @@ struct IpcHandshakePacket : public IpcPacket {
   IpcHandshakePacket(const sgx_ec256_public_t &sender_pk)
       : IpcPacket(HANDSHAKE), sender_pk(sender_pk) {}
 };
+
 struct IpcRecordPacket : public IpcPacket {
   uint8_t iv[IV_LEN];
   const uint32_t len;
@@ -53,10 +56,62 @@ public:
   }
 };
 
+struct Message {
+  enum Type { CHALLENGE, RESPONSE } type;
+  const uint8_t *data() const {
+    return reinterpret_cast<const uint8_t *>(this);
+  }
+  static const Message *safe_cast(const uint8_t *data, size_t len);
+
+protected:
+  Message(Type type) : type(type) {}
+  size_t data_size() const; // override me!
+};
+
+struct ChallengeMessage : public Message {
+  const uint64_t challenge_id;
+  const uint64_t a, b;
+  ChallengeMessage(uint64_t challenge_id, uint64_t a, uint64_t b)
+      : Message(CHALLENGE), challenge_id(challenge_id), a(a), b(b) {}
+  const size_t data_size() const {
+    return sizeof *this;
+  }
+};
+
+struct ResponseMessage : public Message {
+  const uint64_t challenge_id;
+  const uint64_t c;
+  ResponseMessage(uint64_t challenge_id, uint64_t c)
+      : Message(RESPONSE), challenge_id(challenge_id), c(c) {}
+  const size_t data_size() const {
+    return sizeof *this;
+  }
+};
+
+inline const Message *Message::safe_cast(const uint8_t *data, size_t len) {
+  if (len < sizeof(Message))
+    return nullptr;
+  auto msg = reinterpret_cast<const Message *>(data);
+  switch (msg->type) {
+  case CHALLENGE:
+    if (len < sizeof(ChallengeMessage))
+      return nullptr;
+    break;
+  case RESPONSE:
+    if (len < sizeof(ResponseMessage))
+      return nullptr;
+    break;
+  default:
+    return nullptr;
+  }
+  return msg;
+}
+
 class EnclaveState {
   enum {
     NO_KEY,
     READY,
+    AWAIT_RESPONSE,
     ERROR,
   } stage = ERROR;
 
@@ -64,6 +119,9 @@ class EnclaveState {
   sgx_ec256_private_t sk;
   sgx_ec256_public_t pk;
   sgx_aes_ctr_128bit_key_t ssk;
+
+  uint64_t challenge_id;
+  uint64_t a, b;
 
 public:
   sgx_status_t reset() {
@@ -108,22 +166,58 @@ public:
     std::vector<uint8_t> buf(pkt->len);
     memcpy(iv, pkt->iv, sizeof iv);
     sgx_aes_ctr_decrypt(&ssk, pkt->ciphertext, pkt->len, iv, 8, buf.data());
+    recv(Message::safe_cast(buf.data(), buf.size()));
     eprintf("%s", buf.data());
     return SGX_SUCCESS;
   }
 
-  sgx_status_t say_hello() {
-    uint8_t msg[] = "hello world!";
+  sgx_status_t recv(const Message *msg) {
+    switch (msg->type) {
+    case Message::CHALLENGE:
+      return recv((ChallengeMessage *)msg);
+    case Message::RESPONSE:
+      return recv((ResponseMessage *)msg);
+    default:
+      return SGX_ERROR_INVALID_PARAMETER;
+    }
+  }
+
+  sgx_status_t recv(const ChallengeMessage *msg) {
+    auto id = msg->challenge_id;
+    auto c = msg->a + msg->b;
+    ResponseMessage rep(id, c);
+    return send(&rep);
+  }
+
+  sgx_status_t recv(const ResponseMessage *msg) {
+    assert(stage == AWAIT_RESPONSE);
+    assert(challenge_id == msg->challenge_id);
+    assert(msg->c - a == b);
+    eprintf("Challenge passed!");
+    stage = READY;
+    return SGX_SUCCESS;
+  }
+
+  template <typename M> sgx_status_t send(const M *msg) {
+    const uint8_t *buf = msg->data();
+    size_t buflen = msg->data_size();
+    assert(buflen <= UINT32_MAX);
     uint8_t iv[IV_LEN];
     sgx_read_rand(iv, sizeof iv);
-    auto pkt = IpcRecordPacket::make(sizeof msg);
+    auto pkt = IpcRecordPacket::make(buflen);
     memcpy(pkt->iv, iv, sizeof pkt->iv);
-    sgx_aes_ctr_encrypt(&ssk, msg, sizeof msg, iv, 8, pkt->ciphertext);
-    ipc_send((char *)pkt->to_void(), pkt->size());
-    std::vector<uint8_t> buf(pkt->len);
-    memcpy(iv, pkt->iv, sizeof iv);
-    sgx_aes_ctr_decrypt(&ssk, pkt->ciphertext, pkt->len, iv, 8, buf.data());
-    return SGX_SUCCESS;
+    sgx_aes_ctr_encrypt(&ssk, buf, buflen, iv, 8, pkt->ciphertext);
+    return ipc_send((char *)pkt->to_void(), pkt->size());
+  }
+
+  sgx_status_t issue_challenge() {
+    assert(stage == READY);
+    sgx_read_rand((uint8_t *)&challenge_id, sizeof challenge_id);
+    sgx_read_rand((uint8_t *)&a, sizeof a);
+    sgx_read_rand((uint8_t *)&b, sizeof b);
+    ChallengeMessage msg(challenge_id, a, b);
+    stage = AWAIT_RESPONSE;
+    return send(&msg);
   }
 };
 
@@ -154,6 +248,6 @@ sgx_status_t ipc_recv(const char *buf, size_t buflen) {
   }
 }
 
-void say_hello() {
-  state.say_hello();
+sgx_status_t enclave_issue_challenge() {
+  return state.issue_challenge();
 }

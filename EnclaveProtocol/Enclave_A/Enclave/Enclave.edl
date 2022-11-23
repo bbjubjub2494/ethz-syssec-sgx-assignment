@@ -43,7 +43,7 @@ enclave {
     trusted{
       public sgx_status_t enclave_reset(void);
       public sgx_status_t ipc_recv([in, count=buflen] const char *buf, size_t buflen);
-      public void say_hello();
+      public sgx_status_t enclave_issue_challenge();
     };
     /*
      * ocall_print_string - invokes OCALL to display string buffer inside the enclave.
