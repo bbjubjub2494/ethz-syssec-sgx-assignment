@@ -114,7 +114,8 @@ public:
 
   sgx_status_t say_hello() {
     uint8_t msg[] = "hello world!";
-    uint8_t iv[IV_LEN] = {}; // TODO: randomize
+    uint8_t iv[IV_LEN];
+    sgx_read_rand(iv, sizeof iv);
     auto pkt = IpcRecordPacket::make(sizeof msg);
     memcpy(pkt->iv, iv, sizeof pkt->iv);
     sgx_aes_ctr_encrypt(&ssk, msg, sizeof msg, iv, 8, pkt->ciphertext);
