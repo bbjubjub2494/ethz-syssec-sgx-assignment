@@ -25,5 +25,5 @@ function find_staged {
   git diff-index --name-only --cached $against --diff-filter d -- "$@"
 }
 
-find_staged '*.h' '*.cpp' | xargs -r clang-format -n -Werror || exit
+find_staged '*.h' '*.hpp' '*.cpp' | xargs -r clang-format -n -Werror || exit
 """
