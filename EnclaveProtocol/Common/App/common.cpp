@@ -133,6 +133,9 @@ static void ipc_connect() {
 
 /* OCall functions */
 void ocall_ipc_send(const char *buf, size_t buflen) {
+  /*************************
+   * BEGIN 1. sending packets
+   *************************/
   ssize_t r = write(ipc_fd, buf, buflen);
   if (r < 0) {
     perror("write");
@@ -141,6 +144,9 @@ void ocall_ipc_send(const char *buf, size_t buflen) {
     fprintf(stderr, "short write: %zd < %zd", r, buflen);
     exit(1);
   }
+  /*************************
+   * END 1. sending packets
+   *************************/
 }
 
 void ocall_elog(const char *msg) {

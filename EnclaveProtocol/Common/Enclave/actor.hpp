@@ -20,12 +20,17 @@ class Actor {
 
   uint64_t challenge_id;
   uint64_t a, b;
-  uint64_t round_count = 20;
+  uint64_t round_count;
 
 public:
   sgx_status_t reset() {
     sgx_status_t status;
 
+    /*************************
+     * BEGIN 2. generate key pair
+     *************************/
+    // Based on
+    // https://stackoverflow.com/questions/42015168/sgx-ecc256-create-key-pair-fail
     status = sgx_ecc256_open_context(&handle);
     if (status) {
       logf("sgx_ecc256_open_context: %d", status);
@@ -39,9 +44,13 @@ public:
       state = ERROR;
       return status;
     }
+    /*************************
+     * END 2. generate key pair
+     *************************/
     IpcHandshakePacket handshake(pk);
     ocall_ipc_send((char *)handshake.to_void(), sizeof handshake);
     state = NO_KEY;
+    round_count = 20;
     return status;
   }
 
@@ -54,6 +63,9 @@ public:
       logf("unexpected handshake");
       return SGX_ERROR_INVALID_PARAMETER;
     }
+    /*************************
+     * BEGIN 3. calculate shared secret
+     *************************/
     sgx_ec256_dh_shared_t dh_ssk;
     sgx_status_t status =
         sgx_ecc256_compute_shared_dhkey(&sk, &pkt->sender_pk, &dh_ssk, handle);
@@ -62,6 +74,9 @@ public:
       return status;
     }
     std::memcpy(ssk, &dh_ssk.s, sizeof ssk);
+    /*************************
+     * END 3. calculate shared secret
+     *************************/
     state = READY;
     return status;
   }
@@ -71,11 +86,17 @@ public:
       logf("unable to process messages");
       return SGX_ERROR_INVALID_PARAMETER;
     }
+    /*************************
+     * BEGIN 6. Decrypt messages
+     *************************/
     uint8_t iv[IV_LEN];
     std::vector<uint8_t> buf(pkt->len);
     std::memcpy(iv, pkt->iv, sizeof iv);
     sgx_aes_ctr_decrypt(&ssk, pkt->ciphertext, pkt->len, iv, 8, buf.data());
     recv(Message::safe_cast(buf.data(), buf.size()));
+    /*************************
+     * END 6. Decrypt messages
+     *************************/
     return SGX_SUCCESS;
   }
 
@@ -93,12 +114,18 @@ public:
   }
 
   sgx_status_t recv(const ChallengeMessage *msg) {
+    /*************************
+     * BEGIN 7. Compute response
+     *************************/
     auto id = msg->challenge_id;
     auto c = msg->a + msg->b;
     ResponseMessage rep(id, c);
     if (--round_count <= 0)
       state = DONE;
     return send(&rep);
+    /*************************
+     * END 7. Compute response
+     *************************/
   }
 
   sgx_status_t recv(const ResponseMessage *msg) {
@@ -106,6 +133,9 @@ public:
       logf("unexpected response");
       return SGX_ERROR_INVALID_PARAMETER;
     }
+    /*************************
+     * BEGIN 5. Verify response
+     *************************/
     if (challenge_id != msg->challenge_id) {
       logf("invalid response challenge id");
       return SGX_ERROR_INVALID_PARAMETER;
@@ -114,6 +144,9 @@ public:
       logf("invalid response proof");
       return SGX_ERROR_INVALID_PARAMETER;
     }
+    /*************************
+     * END 5. Verify response
+     *************************/
     logf("Challenge passed!");
     state = READY;
     if (--round_count <= 0)
@@ -136,10 +169,16 @@ public:
   sgx_status_t issue_challenge() {
     assert(state == READY);
     logf("issuing challenge...");
+    /*************************
+     * BEGIN 4. Generate challenge
+     *************************/
     sgx_read_rand((uint8_t *)&challenge_id, sizeof challenge_id);
     sgx_read_rand((uint8_t *)&a, sizeof a);
     sgx_read_rand((uint8_t *)&b, sizeof b);
     ChallengeMessage msg(challenge_id, a, b);
+    /*************************
+     * END 4. Generate challenge
+     *************************/
     state = AWAIT_RESPONSE;
     return send(&msg);
   }
