@@ -94,8 +94,8 @@ public:
   sgx_status_t recv(const ChallengeMessage *msg) {
     auto id = msg->challenge_id;
     auto c = msg->a + msg->b;
-    logf("my cid: %ld", id);
     ResponseMessage rep(id, c);
+    state = DONE;
     return send(&rep);
   }
 
@@ -136,7 +136,6 @@ public:
     sgx_read_rand((uint8_t *)&a, sizeof a);
     sgx_read_rand((uint8_t *)&b, sizeof b);
     ChallengeMessage msg(challenge_id, a, b);
-    logf("my cid: %ld", challenge_id);
     state = AWAIT_RESPONSE;
     return send(&msg);
   }

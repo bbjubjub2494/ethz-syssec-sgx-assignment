@@ -30,6 +30,18 @@ int SGX_CDECL main(int argc, char *argv[]) {
   char buf[BUFSIZ];
   while ((buflen = read(ipc_fd, buf, BUFSIZ)) > 0) {
     enclave_ipc_recv(eid, &sgx_status, buf, buflen);
+    if (sgx_status != SGX_SUCCESS) {
+      print_error_message(sgx_status);
+      return -1;
+    }
+    EnclaveState state;
+    sgx_status = enclave_state(eid, &state);
+    if (sgx_status != SGX_SUCCESS) {
+      print_error_message(sgx_status);
+      return -1;
+    }
+    if (state == DONE || state == ERROR)
+      break;
   }
 
   /* Destroy the enclave */

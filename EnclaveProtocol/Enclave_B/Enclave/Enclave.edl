@@ -37,6 +37,7 @@ enclave {
     NO_KEY,
     READY,
     AWAIT_RESPONSE,
+    DONE,
     ERROR
   };
 

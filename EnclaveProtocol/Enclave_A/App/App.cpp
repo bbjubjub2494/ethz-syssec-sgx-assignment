@@ -31,16 +31,17 @@ int SGX_CDECL main(int argc, char *argv[]) {
   bool need_challenge = true;
   while ((buflen = read(ipc_fd, buf, BUFSIZ)) > 0) {
     enclave_ipc_recv(eid, &sgx_status, buf, buflen);
-    if (need_challenge) {
-      EnclaveState state;
-      sgx_status = enclave_state(eid, &state);
-      if (sgx_status != SGX_SUCCESS) {
-        print_error_message(sgx_status);
-        return -1;
-      }
-      printf("State: %d\n", state);
-      if (state != READY)
-        continue;
+    if (sgx_status != SGX_SUCCESS) {
+      print_error_message(sgx_status);
+      return -1;
+    }
+    EnclaveState state;
+    sgx_status = enclave_state(eid, &state);
+    if (sgx_status != SGX_SUCCESS) {
+      print_error_message(sgx_status);
+      return -1;
+    }
+    if (need_challenge && state == READY) {
       enclave_issue_challenge(eid, &sgx_status);
       if (sgx_status != SGX_SUCCESS) {
         print_error_message(sgx_status);
@@ -48,6 +49,8 @@ int SGX_CDECL main(int argc, char *argv[]) {
       }
       need_challenge = false;
     }
+    if (state == DONE || state == ERROR)
+      break;
   }
 
   /* Destroy the enclave */
