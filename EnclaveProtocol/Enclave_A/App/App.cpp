@@ -169,6 +169,8 @@ int SGX_CDECL main(int argc, char *argv[]) {
     return -1;
   }
 
+  say_hello(global_eid);
+
   size_t buflen;
   char buf[BUFSIZ];
   while ((buflen = read(ipc_fd, buf, BUFSIZ)) > 0) {
