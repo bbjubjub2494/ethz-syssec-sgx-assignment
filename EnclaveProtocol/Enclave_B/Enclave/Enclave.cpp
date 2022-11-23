@@ -1,26 +1,36 @@
-#include "Enclave.h"
-#include "Enclave_t.h" /* print_string */
-#include <stdarg.h>
-#include <stdio.h> /* vsnprintf */
-#include <string.h>
+#include "actor.hpp"
 
-int enclave_secret = 42;
+static Actor actor;
 
-int printf(const char *fmt, ...) {
-  char buf[BUFSIZ] = {'\0'};
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf(buf, BUFSIZ, fmt, ap);
-  va_end(ap);
-  ocall_print_string(buf);
-  return (int)strnlen(buf, BUFSIZ - 1) + 1;
+sgx_status_t enclave_reset() {
+  return actor.reset();
 }
 
-sgx_status_t printSecret() {
-  char buf[BUFSIZ] = {"From Enclave: Hello from the enclave.\n"};
-  ocall_print_string(buf);
-  printf(
-      "From Enclave: Another way to print from the Enclave. My secret is %u.\n",
-      enclave_secret);
-  return SGX_SUCCESS;
+sgx_status_t enclave_ipc_recv(const char *buf, size_t buflen) {
+  auto pkt = (const IpcPacket *)buf;
+  assert(buflen >= sizeof *pkt);
+  switch (pkt->type) {
+  case IpcPacket::HANDSHAKE: {
+    auto pkt1 = static_cast<const IpcHandshakePacket *>(pkt);
+    assert(buflen >= sizeof *pkt1);
+    return actor.recv(pkt1);
+  } break;
+  case IpcPacket::RECORD: {
+    auto pkt1 = static_cast<const IpcRecordPacket *>(pkt);
+    assert(buflen >= sizeof *pkt1);
+    assert(buflen >= pkt1->size());
+    return actor.recv(pkt1);
+  } break;
+  default:
+    logf("unable to upcast!");
+    return SGX_ERROR_INVALID_PARAMETER;
+  }
+}
+
+sgx_status_t enclave_issue_challenge() {
+  return actor.issue_challenge();
+}
+
+EnclaveState enclave_state() {
+  return actor.get_state();
 }

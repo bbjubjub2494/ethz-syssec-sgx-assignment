@@ -6,3 +6,5 @@ services:
     volumes:
      - ./EnclaveProtocol:/home/syssec/EnclaveProtocol
     tty: true
+    working_dir: /home/syssec/EnclaveProtocol/
+    command: ./run.sh

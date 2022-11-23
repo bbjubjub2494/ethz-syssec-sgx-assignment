@@ -32,7 +32,6 @@
 #ifndef _ENCLAVE_H_
 #define _ENCLAVE_H_
 
-#include "sgx_tcrypto.h"
 #include <assert.h>
 #include <stdlib.h>
 
