@@ -1,6 +1,6 @@
 #include "actor.hpp"
 
-static Actor actor;
+static Actor actor(PSK_B, PSK_A);
 
 sgx_status_t enclave_reset() {
   return actor.reset();

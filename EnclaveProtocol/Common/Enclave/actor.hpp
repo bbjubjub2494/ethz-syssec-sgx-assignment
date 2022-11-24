@@ -10,6 +10,9 @@
 
 #include "sgx_trts.h"
 
+const uint8_t PSK_A[] = "I AM ALICE";
+const uint8_t PSK_B[] = "I AM BOBOB";
+
 class Actor {
   EnclaveState state = ERROR;
 
@@ -22,7 +25,12 @@ class Actor {
   uint64_t a, b;
   uint64_t round_count;
 
+  const uint8_t *my_psk;
+  const uint8_t *other_psk;
+
 public:
+  Actor(const uint8_t my_psk[PSK_LEN], const uint8_t other_psk[PSK_LEN])
+      : my_psk(my_psk), other_psk(other_psk) {}
   sgx_status_t reset() {
     sgx_status_t status;
 
@@ -78,8 +86,7 @@ public:
      * END 3. calculate shared secret
      *************************/
     state = AWAIT_AUTHENTICATION;
-    uint8_t psk[PSK_LEN];
-    AuthenticationMessage msg(psk);
+    AuthenticationMessage msg(my_psk);
     return send(&msg);
   }
 
@@ -123,7 +130,11 @@ public:
       logf("unexpected authentication");
       return SGX_ERROR_INVALID_PARAMETER;
     }
-    // TODO: check
+    if (std::memcmp(msg->psk, other_psk, PSK_LEN) != 0) {
+      logf("authentication failure");
+      state = ERROR;
+      return SGX_ERROR_INVALID_PARAMETER;
+    }
     state = READY;
     return SGX_SUCCESS;
   }

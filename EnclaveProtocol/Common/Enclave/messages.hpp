@@ -16,7 +16,7 @@ protected:
 
 struct AuthenticationMessage : public Message {
   uint8_t psk[PSK_LEN];
-  AuthenticationMessage(uint8_t psk[PSK_LEN]) : Message(AUTHENTICATION) {
+  AuthenticationMessage(const uint8_t psk[PSK_LEN]) : Message(AUTHENTICATION) {
     std::memcpy(this->psk, psk, PSK_LEN);
   }
   size_t data_size() const {
